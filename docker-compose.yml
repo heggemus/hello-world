@@ -1,0 +1,88 @@
+version: '3.1'
+services:
+   web:
+     image: hegenious/get-started:part2
+     deploy:
+       replicas: 5
+       restart_policy:
+         condition: on-failure
+       resources:
+         limits:
+           cpus: "0.1"
+           memory: 50M
+     ports:
+       - "81:80"
+     networks:
+      - webnet
+   db:
+     image: mysql:5.7
+     volumes:
+       - db_data:/var/lib/mysql
+     deploy:
+       placement:
+         constraints: [node.role == manager]
+     environment:
+       MYSQL_ROOT_PASSWORD_FILE: /run/secrets/db_root_password
+       MYSQL_DATABASE: wordpress
+       MYSQL_USER: wordpress
+       MYSQL_PASSWORD_FILE: /run/secrets/db_password
+     secrets: 
+       - db_root_password
+       - db_password
+
+   visualizer:
+     image: dockersamples/visualizer:stable
+     ports:
+       - "8080:8080"
+     volumes:
+       - "/var/run/docker.sock:/var/run/docker.sock"
+     deploy:
+       placement:
+         constraints: [node.role == manager]
+     networks:
+       - webnet
+   wordpress:
+     depends_on:
+       - db
+     image: wordpress:latest
+     ports:
+       - "80:80"
+     environment:
+       WORDPRESS_DB_HOST: db:3306
+       WORDPRESS_DB_USER: wordpress
+       WORDPRESS_DB_PASSWORD_FILE: /run/secrets/db_password
+     secrets:
+       - db_password
+   redis:
+     image: redis
+     ports:
+       - "6379:6379"
+     volumes:
+       - data:/data
+     deploy:
+       placement:
+         constraints: [node.role == manager]
+     command: redis-server --appendonly yes
+     networks:
+       - webnet
+   phpmyadmin:
+     image: phpmyadmin/phpmyadmin:latest
+     ports:
+       - 8181:80
+     environment:
+       MYSQL_USERNAME: root
+       MYSQL_ROOT_PASSWORDFILE: /run/secrets/db_root_password
+       PMA_HOST: db
+     secrets:
+       - db_root_password
+
+volumes:
+    db_data:
+    data:
+networks:
+  webnet:
+secrets:
+   db_password:
+     file: db_password.txt
+   db_root_password:
+     file: db_root_password.txt
